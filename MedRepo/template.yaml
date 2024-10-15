@@ -1,0 +1,222 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  MedRepo
+
+  Sample SAM Template for MedRepo
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 10
+  Api:
+    Cors: # Enable CORS globally for all API Gateway resources
+      AllowMethods: "'OPTIONS,GET,POST,DELETE,PUT'"
+      AllowOrigin: "'http://localhost:3000'" # Adjust as needed for specific origins
+      AllowHeaders: "'Content-Type'"
+
+Resources:
+  createUser:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/
+      Handler: user-management/createUser.createUser
+      Runtime: nodejs18.x
+      Architectures:
+      - x86_64
+      Events:
+        HelloWorld:
+          Type: Api
+          Properties:
+            Path: /createUser
+            Method: POST
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserTable
+  getALLUsers:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/
+      Handler: user-management/getAllUsers.getALLUsers
+      Runtime: nodejs18.x
+      Architectures:
+      - x86_64
+      Events:
+        HelloWorld:
+          Type: Api
+          Properties:
+            Path: /getALLUsers
+            Method: GET
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserTable
+  updateUser:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/
+      Handler: user-management/updateUser.updateUser
+      Runtime: nodejs18.x
+      Architectures:
+      - x86_64
+      Events:
+        HelloWorld:
+          Type: Api
+          Properties:
+            Path: /updateUser/{id}
+            Method: PUT
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserTable
+  deleteUser:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/
+      Handler: user-management/deleteUser.deleteUser
+      Runtime: nodejs18.x
+      Architectures:
+      - x86_64
+      Events:
+        HelloWorld:
+          Type: Api
+          Properties:
+            Path: /deleteUser/{id}
+            Method: DELETE
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserTable
+  getUserById:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/
+      Handler: user-management/getUserById.getUserById
+      Runtime: nodejs18.x
+      Architectures:
+      - x86_64
+      Events:
+        HelloWorld:
+          Type: Api
+          Properties:
+            Path: /getUserById/{id}
+            Method: GET
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserTable
+
+  #report functions
+  createReport:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/
+      Handler: report-management/createReport.createReport
+      Runtime: nodejs18.x
+      Architectures:
+      - x86_64
+      Events:
+        HelloWorld:
+          Type: Api
+          Properties:
+            Path: /createReport
+            Method: POST
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ReportTable
+  getReportsById:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/
+      Handler: report-management/getReportsById.getReportsById
+      Runtime: nodejs18.x
+      Architectures:
+      - x86_64
+      Events:
+        HelloWorld:
+          Type: Api
+          Properties:
+            Path: /getReports/{id}
+            Method: GET
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ReportTable
+  getUserReport:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/
+      Handler: report-management/getUserReport.getUserReport
+      Runtime: nodejs18.x
+      Architectures:
+      - x86_64
+      Events:
+        HelloWorld:
+          Type: Api
+          Properties:
+            Path: /getReport
+            Method: POST
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ReportTable
+  deleteReport:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/
+      Handler: report-management/deleteReport.deleteReport
+      Runtime: nodejs18.x
+      Architectures:
+      - x86_64
+      Events:
+        HelloWorld:
+          Type: Api
+          Properties:
+            Path: /deleteReport/{id}
+            Method: DELETE
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ReportTable
+  UserTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Users
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
+
+  ReportTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Reports
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
+
+
+  ApplicationResourceGroup:
+    Type: AWS::ResourceGroups::Group
+    Properties:
+      Name:
+        Fn::Sub: ApplicationInsights-SAM-${AWS::StackName}
+      ResourceQuery:
+        Type: CLOUDFORMATION_STACK_1_0
+  ApplicationInsightsMonitoring:
+    Type: AWS::ApplicationInsights::Application
+    Properties:
+      ResourceGroupName:
+        Ref: ApplicationResourceGroup
+      AutoConfigurationEnabled: 'true'
+Outputs:
+  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+  # Find out more about other implicit resources you can reference within SAM
+  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+  HelloWorldApi:
+    Description: API Gateway endpoint URL for Prod stage for Hello World function
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
