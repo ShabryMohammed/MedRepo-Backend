@@ -5,10 +5,9 @@ Description: >
 
   Sample SAM Template for MedRepo
 
-# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
-    Timeout: 10
+    Timeout: 30
   Api:
     Cors: # Enable CORS globally for all API Gateway resources
       AllowMethods: "'OPTIONS,GET,POST,DELETE,PUT'"
@@ -23,7 +22,7 @@ Resources:
       Handler: user-management/createUser.createUser
       Runtime: nodejs18.x
       Architectures:
-      - x86_64
+        - x86_64
       Events:
         HelloWorld:
           Type: Api
@@ -33,6 +32,7 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref UserTable
+            
   getALLUsers:
     Type: AWS::Serverless::Function
     Properties:
@@ -40,7 +40,7 @@ Resources:
       Handler: user-management/getAllUsers.getALLUsers
       Runtime: nodejs18.x
       Architectures:
-      - x86_64
+        - x86_64
       Events:
         HelloWorld:
           Type: Api
@@ -50,6 +50,7 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref UserTable
+            
   updateUser:
     Type: AWS::Serverless::Function
     Properties:
@@ -57,7 +58,7 @@ Resources:
       Handler: user-management/updateUser.updateUser
       Runtime: nodejs18.x
       Architectures:
-      - x86_64
+        - x86_64
       Events:
         HelloWorld:
           Type: Api
@@ -67,6 +68,17 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref UserTable
+        - Statement:
+            Effect: Allow
+            Action:
+              - sns:Subscribe
+              - sns:Unsubscribe
+              - sns:Publish
+              - sns:ListSubscriptionsByTopic
+            Resource:
+              - arn:aws:sns:us-east-1:724772054324:EmailTopic
+              - arn:aws:sns:us-east-1:724772054324:SMSTopic
+
   deleteUser:
     Type: AWS::Serverless::Function
     Properties:
@@ -74,7 +86,7 @@ Resources:
       Handler: user-management/deleteUser.deleteUser
       Runtime: nodejs18.x
       Architectures:
-      - x86_64
+        - x86_64
       Events:
         HelloWorld:
           Type: Api
@@ -84,6 +96,7 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref UserTable
+            
   getUserById:
     Type: AWS::Serverless::Function
     Properties:
@@ -91,7 +104,7 @@ Resources:
       Handler: user-management/getUserById.getUserById
       Runtime: nodejs18.x
       Architectures:
-      - x86_64
+        - x86_64
       Events:
         HelloWorld:
           Type: Api
@@ -102,7 +115,7 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName: !Ref UserTable
 
-  #report functions
+    # Report functions
   createReport:
     Type: AWS::Serverless::Function
     Properties:
@@ -110,7 +123,7 @@ Resources:
       Handler: report-management/createReport.createReport
       Runtime: nodejs18.x
       Architectures:
-      - x86_64
+        - x86_64
       Events:
         HelloWorld:
           Type: Api
@@ -120,6 +133,15 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ReportTable
+        - Statement:
+            Effect: Allow
+            Action:
+              - lambda:InvokeFunction
+            Resource:
+              - arn:aws:lambda:us-east-1:724772054324:function:MedRepo-sendEmailNotification-m4ybPqS2cSYh
+              - arn:aws:lambda:us-east-1:724772054324:function:MedRepo-sendSmsNotification-e5iiIGsUEP4F
+
+            
   getReportsById:
     Type: AWS::Serverless::Function
     Properties:
@@ -127,7 +149,7 @@ Resources:
       Handler: report-management/getReportsById.getReportsById
       Runtime: nodejs18.x
       Architectures:
-      - x86_64
+        - x86_64
       Events:
         HelloWorld:
           Type: Api
@@ -137,6 +159,7 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ReportTable
+            
   getUserReport:
     Type: AWS::Serverless::Function
     Properties:
@@ -144,7 +167,7 @@ Resources:
       Handler: report-management/getUserReport.getUserReport
       Runtime: nodejs18.x
       Architectures:
-      - x86_64
+        - x86_64
       Events:
         HelloWorld:
           Type: Api
@@ -154,6 +177,7 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ReportTable
+            
   deleteReport:
     Type: AWS::Serverless::Function
     Properties:
@@ -161,7 +185,7 @@ Resources:
       Handler: report-management/deleteReport.deleteReport
       Runtime: nodejs18.x
       Architectures:
-      - x86_64
+        - x86_64
       Events:
         HelloWorld:
           Type: Api
@@ -171,6 +195,46 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ReportTable
+            
+  # Email notification function
+  sendEmailNotification:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/
+      Handler: notification-management/emailNotification.handler
+      Runtime: nodejs18.x
+      Architectures:
+        - x86_64
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserTable  
+        - Statement:
+            Effect: Allow
+            Action:
+              - sns:Publish
+            Resource:
+              - arn:aws:sns:us-east-1:724772054324:EmailTopic
+
+  # SMS notification function
+  sendSmsNotification:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/
+      Handler: notification-management/smsNotification.handler
+      Runtime: nodejs18.x
+      Architectures:
+        - x86_64
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserTable  # Added access to UserTable for fetching user phone number
+        - Statement:
+            Effect: Allow
+            Action:
+              - sns:Publish
+            Resource:
+              - arn:aws:sns:us-east-1:724772054324:SMSTopic
+              - '*'
+
   UserTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -199,7 +263,6 @@ Resources:
         ReadCapacityUnits: 2
         WriteCapacityUnits: 2
 
-
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group
     Properties:
@@ -207,16 +270,15 @@ Resources:
         Fn::Sub: ApplicationInsights-SAM-${AWS::StackName}
       ResourceQuery:
         Type: CLOUDFORMATION_STACK_1_0
+        
   ApplicationInsightsMonitoring:
     Type: AWS::ApplicationInsights::Application
     Properties:
       ResourceGroupName:
         Ref: ApplicationResourceGroup
       AutoConfigurationEnabled: 'true'
+      
 Outputs:
-  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
-  # Find out more about other implicit resources you can reference within SAM
-  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
   HelloWorldApi:
     Description: API Gateway endpoint URL for Prod stage for Hello World function
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
