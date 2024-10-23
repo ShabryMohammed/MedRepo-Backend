@@ -1,65 +1,44 @@
 import AWS from 'aws-sdk';
-import DynamoDB from 'aws-sdk/clients/dynamodb.js';
 
-const sns = new AWS.SNS();
-const docClient = new DynamoDB.DocumentClient();
+const ses = new AWS.SES();
 
-const EMAIL_TOPIC_ARN = 'arn:aws:sns:us-east-1:724772054324:EmailTopic'; // Replace with your topic ARN
-
-export const handler = async (event) => {
-    const { userId, reportId } = JSON.parse(event.body);
-
+export const sendEmailNotification = async (event) => {
     try {
-        console.log('Received event:', event);  // Log the entire event for debugging
+        // Parse the SNS message to get the necessary information
+        const snsMessage = event.Records[0].Sns.Message;
+        const { email, reportId, reportUrl } = JSON.parse(snsMessage);
 
-        // Fetch user details for notification
-        const userResult = await docClient.get({
-            TableName: 'Users',
-            Key: { id: userId },
-        }).promise();
-
-        const user = userResult.Item;
-        console.log('Fetched user:', user);  // Log user details
-
-        if (!user) {
-            console.error(`User not found for userId: ${userId}`);
-            return {
-                statusCode: 404,
-                body: JSON.stringify({ message: 'User not found' }),
-            };
-        }
-
-        // Notify the user if email notifications are enabled
-        if (user.emailNotification) {
-            console.log('Sending email notification to:', user.email);
-            await sns.publish({
-                TopicArn: EMAIL_TOPIC_ARN,
-                Message: `Your report is ready. Report ID: ${reportId}`,
-                Subject: 'Report Ready Notification',
-                MessageAttributes: {
-                    'userEmail': {
-                        DataType: 'String',
-                        StringValue: user.email,
+        // Define email parameters
+        const params = {
+            Source: 'shabry967@gmail.com',
+            Destination: {
+                ToAddresses: [email],
+            },
+            Message: {
+                Subject: {
+                    Data: `Your Report (ID: ${reportId}) has been created`,
+                },
+                Body: {
+                    Text: {
+                        Data: `Dear User,\n\nYour report has been successfully created.\n\nReport URL: ${reportUrl}\n\nThank you, MedRepo Team`,
                     },
                 },
-            }).promise();
-            console.log('Email notification sent successfully.');
-        } else {
-            console.log('Email notification not enabled for user:', userId);
-        }
+            },
+        };
+
+        // Send email using SES
+        const result = await ses.sendEmail(params).promise();
+        console.log('Email sent successfully:', result);
 
         return {
             statusCode: 200,
-            body: JSON.stringify({ message: 'Email notification sent successfully.' }),
+            body: JSON.stringify({ message: 'Email sent successfully' }),
         };
     } catch (error) {
-        console.error('Error sending email notification:', error);
+        console.error('Error sending email:', error);
         return {
             statusCode: 500,
-            body: JSON.stringify({
-                message: 'Error sending email notification.',
-                error: error.message,  // Log the error message for debugging
-            }),
+            body: JSON.stringify({ message: 'Failed to send email', error: error.message }),
         };
     }
 };

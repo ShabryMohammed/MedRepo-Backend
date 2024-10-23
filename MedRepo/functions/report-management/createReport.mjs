@@ -3,7 +3,7 @@ import DynamoDB from 'aws-sdk/clients/dynamodb.js';
 import AWS from 'aws-sdk';
 
 const docClient = new DynamoDB.DocumentClient();
-const lambda = new AWS.Lambda();
+const sns = new AWS.SNS();
 
 const headers = {
     "Access-Control-Allow-Headers": "Content-Type",
@@ -13,19 +13,14 @@ const headers = {
 
 export const createReport = async (event) => {
     try {
-        console.log('Received event:', event);  // Log the entire event for debugging
-
         const { refNum, userId, nic, name, status, age, reportUrl } = JSON.parse(event.body);
 
         // Validate input fields
         if (!refNum || !userId || !nic || !name || !status || !age || !reportUrl) {
-            console.warn('Validation failed. Missing required fields:', { refNum, userId, nic, name, status, age, reportUrl });
             return {
                 statusCode: 400,
                 headers,
-                body: JSON.stringify({
-                    message: 'Missing required fields: userId, nic, name, status, age, and reportUrl are required',
-                }),
+                body: JSON.stringify({ message: 'Missing required fields' }),
             };
         }
 
@@ -36,7 +31,7 @@ export const createReport = async (event) => {
         await docClient.put({
             TableName: 'Reports',
             Item: {
-                id: reportId, 
+                id: reportId,
                 refNum,
                 userId,
                 nic,
@@ -48,21 +43,41 @@ export const createReport = async (event) => {
             },
         }).promise();
 
-        console.log('Report created successfully:', { reportId, refNum, userId });  // Log successful creation
-
-        // Invoke the notification Lambda function for email
-        const emailResult = await lambda.invoke({
-            FunctionName: 'MedRepo-sendEmailNotification-m4ybPqS2cSYh', // Replace with your function name
-            Payload: JSON.stringify({ body: JSON.stringify({ userId, reportId }) }),
+        // Get the user's notification preferences
+        const { Item: user } = await docClient.get({
+            TableName: 'Users',
+            Key: { id: userId },
         }).promise();
-        console.log('Email function response:', emailResult); // Log response from email function
 
-        // Invoke the notification Lambda function for SMS
-        const smsResult = await lambda.invoke({
-            FunctionName: 'MedRepo-sendSmsNotification-e5iiIGsUEP4F', // Replace with your function name
-            Payload: JSON.stringify({ body: JSON.stringify({ userId, reportId }) }),
-        }).promise();
-        console.log('SMS function response:', smsResult); // Log response from SMS function
+        // If email notification is enabled, publish a message to SNS
+        if (user?.emailNotification) {
+            await sns.publish({
+                TopicArn: 'arn:aws:sns:us-east-1:724772054324:UploadReportNotificationTopic',
+                Message: JSON.stringify({
+                    email: user.email,
+                    reportId,
+                    reportUrl,
+                }),
+            }).promise();
+        }
+
+        // If SMS notification is enabled, send SMS
+        if (user?.smsNotification && user.contactnumber) {
+            await sns.publish({
+                TopicArn: 'arn:aws:sns:us-east-1:724772054324:UploadReportNotificationTopic',
+                Message: JSON.stringify({
+                    phoneNumber: user.contactnumber,
+                    reportId,
+                    reportUrl,
+                }),
+                MessageAttributes: {
+                    'AWS.SNS.SMS.SMSType': {
+                        DataType: 'String',
+                        StringValue: 'Transactional'
+                    }
+                }
+            }).promise();
+        }
 
         return {
             statusCode: 200,
@@ -73,13 +88,12 @@ export const createReport = async (event) => {
             }),
         };
     } catch (error) {
-        console.error('Error creating report:', error);
         return {
             statusCode: 500,
             headers,
             body: JSON.stringify({
-                message: 'Error creating report. Please try again later.',
-                error: error.message,  // Log the error message for debugging
+                message: 'Error creating report',
+                error: error.message,
             }),
         };
     }

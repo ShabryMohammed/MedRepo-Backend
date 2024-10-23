@@ -68,16 +68,6 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref UserTable
-        - Statement:
-            Effect: Allow
-            Action:
-              - sns:Subscribe
-              - sns:Unsubscribe
-              - sns:Publish
-              - sns:ListSubscriptionsByTopic
-            Resource:
-              - arn:aws:sns:us-east-1:724772054324:EmailTopic
-              - arn:aws:sns:us-east-1:724772054324:SMSTopic
 
   deleteUser:
     Type: AWS::Serverless::Function
@@ -114,6 +104,7 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref UserTable
+        
 
     # Report functions
   createReport:
@@ -133,13 +124,14 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ReportTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserTable
         - Statement:
             Effect: Allow
             Action:
-              - lambda:InvokeFunction
-            Resource:
-              - arn:aws:lambda:us-east-1:724772054324:function:MedRepo-sendEmailNotification-m4ybPqS2cSYh
-              - arn:aws:lambda:us-east-1:724772054324:function:MedRepo-sendSmsNotification-e5iiIGsUEP4F
+              - sns:Publish
+            Resource: "arn:aws:sns:us-east-1:724772054324:UploadReportNotificationTopic"
+
 
             
   getReportsById:
@@ -195,45 +187,46 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ReportTable
-            
-  # Email notification function
   sendEmailNotification:
     Type: AWS::Serverless::Function
-    Properties:
+    Properties: 
       CodeUri: functions/
-      Handler: notification-management/emailNotification.handler
+      Handler: notification-management/emailNotification.sendEmailNotification
       Runtime: nodejs18.x
       Architectures:
         - x86_64
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref UserTable  
         - Statement:
             Effect: Allow
-            Action:
-              - sns:Publish
-            Resource:
-              - arn:aws:sns:us-east-1:724772054324:EmailTopic
+            Action: 
+              - "ses:SendEmail"
+            Resource: "*" # Replace with specific SES resource ARN if needed
+      Events:
+        SNSNotification:
+          Type: SNS
+          Properties:
+            Topic: arn:aws:sns:us-east-1:724772054324:UploadReportNotificationTopic
 
-  # SMS notification function
   sendSmsNotification:
     Type: AWS::Serverless::Function
-    Properties:
+    Properties: 
       CodeUri: functions/
-      Handler: notification-management/smsNotification.handler
+      Handler: notification-management/smsNotification.sendSmsNotification
       Runtime: nodejs18.x
       Architectures:
         - x86_64
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref UserTable  # Added access to UserTable for fetching user phone number
         - Statement:
             Effect: Allow
-            Action:
-              - sns:Publish
-            Resource:
-              - arn:aws:sns:us-east-1:724772054324:SMSTopic
-              - '*'
+            Action: 
+              - "sns:Publish"
+            Resource: "*"
+      Events:
+        SNSNotification:
+          Type: SNS
+          Properties:
+            Topic: arn:aws:sns:us-east-1:724772054324:UploadReportNotificationTopic
+            
 
   UserTable:
     Type: AWS::DynamoDB::Table

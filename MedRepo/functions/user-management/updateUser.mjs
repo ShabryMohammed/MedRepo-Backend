@@ -1,40 +1,12 @@
 import AWS from 'aws-sdk';
 import DynamoDB from 'aws-sdk/clients/dynamodb.js';
 
-const sns = new AWS.SNS();
 const docClient = new DynamoDB.DocumentClient();
 
 const headers = {
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Allow-Origin": "http://localhost:3000",
     "Access-Control-Allow-Methods": "OPTIONS,GET,POST,PUT"
-};
-
-// Topic ARNs for SNS
-const emailTopicArn = 'arn:aws:sns:us-east-1:724772054324:EmailTopic';
-const smsTopicArn = 'arn:aws:sns:us-east-1:724772054324:SMSTopic';
-
-// Function to list and unsubscribe from SNS
-const unsubscribeFromSNS = async (topicArn, endpoint) => {
-    try {
-        const subscriptions = await sns.listSubscriptionsByTopic({ TopicArn: topicArn }).promise();
-        console.log('Subscriptions:', subscriptions); // Log the subscriptions
-        
-        // Find the subscription with the matching endpoint (email or phone)
-        const subscription = subscriptions.Subscriptions.find(sub =>
-            sub.Endpoint === endpoint && sub.SubscriptionArn !== 'PendingConfirmation'
-        );
-
-        if (subscription) {
-            // Unsubscribe the user
-            await sns.unsubscribe({ SubscriptionArn: subscription.SubscriptionArn }).promise();
-            console.log(`Successfully unsubscribed from ${topicArn} with endpoint ${endpoint}`);
-        } else {
-            console.log(`No active subscription found for ${endpoint} on ${topicArn}`);
-        }
-    } catch (error) {
-        console.error('Error unsubscribing from SNS:', error);
-    }
 };
 
 export const updateUser = async (event) => {
@@ -72,39 +44,15 @@ export const updateUser = async (event) => {
             Key: { id: userId },
         }).promise();
 
-        // Email subscription handling
+        // Update email notification preference
         if (emailNotification !== undefined && emailNotification !== user.emailNotification) {
-            if (emailNotification) {
-                // Subscribe the user to the email topic
-                await sns.subscribe({
-                    TopicArn: emailTopicArn,
-                    Protocol: 'email',
-                    Endpoint: user.email // Use the existing email in the database
-                }).promise();
-                console.log('User subscribed to email notifications.');
-            } else {
-                // Unsubscribe the user directly from SNS without storing the ARN
-                await unsubscribeFromSNS(emailTopicArn, user.email);
-            }
             updateExpression.push('#emailNotification = :emailNotification');
             expressionAttributeValues[':emailNotification'] = emailNotification;
             expressionAttributeNames['#emailNotification'] = 'emailNotification';
         }
 
-        // SMS subscription handling
+        // Update SMS notification preference
         if (smsNotification !== undefined && smsNotification !== user.smsNotification) {
-            if (smsNotification) {
-                // Subscribe the user to the SMS topic
-                await sns.subscribe({
-                    TopicArn: smsTopicArn,
-                    Protocol: 'sms',
-                    Endpoint: user.contactnumber // Use the existing contact number in the database
-                }).promise();
-                console.log('User subscribed to SMS notifications.');
-            } else {
-                // Unsubscribe the user directly from SNS without storing the ARN
-                await unsubscribeFromSNS(smsTopicArn, user.contactnumber);
-            }
             updateExpression.push('#smsNotification = :smsNotification');
             expressionAttributeValues[':smsNotification'] = smsNotification;
             expressionAttributeNames['#smsNotification'] = 'smsNotification';
